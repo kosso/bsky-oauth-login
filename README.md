@@ -18,13 +18,6 @@ After spending hours and hours going through documents and examples to get this 
 - Node.js (v14 or higher)
 - A Bluesky account for testing
 
-## Installation
-
-1. Install dependencies:
-```bash
-npm install
-```
-
 ## Running the App
 
 1. Install dependencies:
