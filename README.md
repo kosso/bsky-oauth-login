@@ -9,8 +9,9 @@ After spending hours and hours going through documents and examples to get this 
 ## Features
 
 - Sign in with Bluesky account using OAuth 2.0
-- Stores user identity (DID and handle) locally
+- Stores user identity (DID, handle, avatarURL, bio) locally
 - Session management
+- Create a post to Bluesky
 - Simple, clean UI
 
 ## Prerequisites
