@@ -118,9 +118,16 @@ app.get('/', async (req, res) => {
           <style>
             body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
             .user-info { background: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0; }
+            .post-form { background: #f8f8f8; padding: 20px; border-radius: 8px; margin: 20px 0; }
             button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #1185fe; color: white; border: none; border-radius: 4px; }
             button:hover { background: #0d6ecd; }
+            button.secondary { background: #6c757d; margin-left: 10px; }
+            button.secondary:hover { background: #5a6268; }
             pre { background: #f8f8f8; padding: 10px; border-radius: 4px; overflow-x: auto; }
+            textarea { width: 100%; padding: 10px; font-size: 14px; font-family: Arial, sans-serif; border: 1px solid #ccc; border-radius: 4px; resize: vertical; box-sizing: border-box; }
+            .char-count { text-align: right; font-size: 12px; color: #666; margin-top: 5px; }
+            .success { background: #d4edda; color: #155724; padding: 10px; border-radius: 4px; margin: 10px 0; }
+            .error { background: #f8d7da; color: #721c24; padding: 10px; border-radius: 4px; margin: 10px 0; }
           </style>
         </head>
         <body>
@@ -132,9 +139,27 @@ app.get('/', async (req, res) => {
             <h3>Full Profile Data:</h3>
             <pre>${JSON.stringify(user, null, 2)}</pre>
           </div>
+          
+          <div class="post-form">
+            <h2>Create a Test Post</h2>
+            <form action="/post" method="POST">
+              <textarea name="text" id="postText" rows="4" maxlength="300" placeholder="What's on your mind?" required></textarea>
+              <div class="char-count"><span id="charCount">0</span> / 300</div>
+              <button type="submit">Post to Bluesky</button>
+            </form>
+          </div>
+          
           <form action="/logout" method="POST">
-            <button type="submit">Sign Out</button>
+            <button type="submit" class="secondary">Sign Out</button>
           </form>
+          
+          <script>
+            const textarea = document.getElementById('postText');
+            const charCount = document.getElementById('charCount');
+            textarea.addEventListener('input', function() {
+              charCount.textContent = this.value.length;
+            });
+          </script>
         </body>
         </html>
       `);
@@ -313,6 +338,137 @@ app.get('/oauth/callback', async (req, res) => {
           </details>
         </div>
         <p><a href="/">← Back to home</a></p>
+      </body>
+      </html>
+    `);
+  }
+});
+
+// Create a post
+app.post('/post', async (req, res) => {
+  if (!req.session.userDid) {
+    return res.redirect('/');
+  }
+
+  try {
+    const { text } = req.body;
+    
+    if (!text || text.trim().length === 0) {
+      return res.redirect('/?error=empty');
+    }
+
+    const user = users.get(req.session.userDid);
+    if (!user) {
+      return res.redirect('/');
+    }
+
+    // Restore the OAuth session using the client
+    const oauthSession = await oauthClient.restore(user.did);
+    
+    if (!oauthSession) {
+      return res.redirect('/?error=session_expired');
+    }
+
+    // Get the PDS URL from the session
+    let pdsUrl = oauthSession.pdsUrl;
+    
+    // If not available, resolve it from the DID
+    if (!pdsUrl) {
+      const didDocUrl = `https://plc.directory/${user.did}`;
+      const didDocResponse = await fetch(didDocUrl);
+      
+      if (!didDocResponse.ok) {
+        throw new Error('Failed to resolve DID');
+      }
+      
+      const didDoc = await didDocResponse.json();
+      const pdsService = didDoc.service?.find(s => s.id === '#atproto_pds');
+      pdsUrl = pdsService?.serviceEndpoint;
+      
+      if (!pdsUrl) {
+        throw new Error('PDS URL not found');
+      }
+    }
+
+    // Create the post record
+    const now = new Date().toISOString();
+    const post = {
+      $type: 'app.bsky.feed.post',
+      text: text.trim(),
+      createdAt: now,
+    };
+
+    // Create the post using the authenticated session
+    const createRecordUrl = `${pdsUrl}/xrpc/com.atproto.repo.createRecord`;
+    
+    const response = await oauthSession.fetchHandler(createRecordUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        repo: user.did,
+        collection: 'app.bsky.feed.post',
+        record: post,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Failed to create post:', response.status, errorText);
+      throw new Error(`Failed to create post: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('Post created:', result);
+
+    // Redirect back with success message
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Post Created!</title>
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+          .success { background: #d4edda; color: #155724; padding: 20px; border-radius: 8px; margin: 20px 0; }
+          button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #1185fe; color: white; border: none; border-radius: 4px; }
+          button:hover { background: #0d6ecd; }
+          pre { background: #f8f8f8; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        </style>
+      </head>
+      <body>
+        <h1>Success!</h1>
+        <div class="success">
+          <p><strong>Your post has been created!</strong></p>
+          <p>Post text: "${text.trim()}"</p>
+          <h3>Response:</h3>
+          <pre>${JSON.stringify(result, null, 2)}</pre>
+        </div>
+        <a href="/"><button>Back to Home</button></a>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Error creating post:', error);
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Error</title>
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+          .error { background: #f8d7da; color: #721c24; padding: 20px; border-radius: 8px; margin: 20px 0; }
+          button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #1185fe; color: white; border: none; border-radius: 4px; }
+          button:hover { background: #0d6ecd; }
+        </style>
+      </head>
+      <body>
+        <h1>Error</h1>
+        <div class="error">
+          <p><strong>Failed to create post:</strong></p>
+          <p>${error.message}</p>
+        </div>
+        <a href="/"><button>Back to Home</button></a>
       </body>
       </html>
     `);
