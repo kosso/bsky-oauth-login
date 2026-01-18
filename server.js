@@ -134,8 +134,11 @@ app.get('/', async (req, res) => {
           <h1>Welcome!</h1>
           <div class="user-info">
             <h2>Signed in as:</h2>
+            ${user.avatar ? `<img src="${user.avatar}" alt="Avatar" style="width: 80px; height: 80px; border-radius: 40px; margin: 10px 0;">` : ''}
+            ${user.displayName ? `<p><strong>Display Name:</strong> ${user.displayName}</p>` : ''}
             <p><strong>Handle:</strong> ${user.handle || 'N/A'}</p>
             <p><strong>DID:</strong> ${user.did}</p>
+            ${user.description ? `<p><strong>Bio:</strong> ${user.description}</p>` : ''}
             <h3>Full Profile Data:</h3>
             <pre>${JSON.stringify(user, null, 2)}</pre>
           </div>
@@ -299,10 +302,33 @@ app.get('/oauth/callback', async (req, res) => {
       console.log('Could not resolve DID to handle:', err.message);
     }
 
+    // Fetch full profile data from public API (including avatar)
+    let profileData = null;
+    try {
+      const profileUrl = `https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=${did}`;
+      console.log('Fetching profile from public API:', profileUrl);
+      
+      const profileResponse = await fetch(profileUrl);
+      if (profileResponse.ok) {
+        profileData = await profileResponse.json();
+        console.log('Profile data fetched:', profileData.handle, profileData.avatar);
+        
+        // Update handle from profile if we got it
+        if (profileData.handle) {
+          handle = profileData.handle;
+        }
+      }
+    } catch (err) {
+      console.log('Could not fetch profile data:', err.message);
+    }
+
     // Store user information
     const userData = {
       did: did,
       handle: handle,
+      displayName: profileData?.displayName || null,
+      avatar: profileData?.avatar || null,
+      description: profileData?.description || null,
       signedInAt: new Date().toISOString()
     };
 
