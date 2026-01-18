@@ -1,7 +1,6 @@
 const express = require('express');
 const session = require('express-session');
 const { NodeOAuthClient } = require('@atproto/oauth-client-node');
-const { AtpAgent } = require('@atproto/api');
 
 const app = express();
 const PORT = 3000;
@@ -250,7 +249,7 @@ app.get('/oauth/callback', async (req, res) => {
     console.log('Calling oauthClient.callback...');
     const result = await oauthClient.callback(params);
     
-    console.log('Callback result received');
+    console.log('Callback result received', result);
     
     // Get the session
     const { session } = result;
