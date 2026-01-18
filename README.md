@@ -2,7 +2,7 @@
 
 A simple Node.js/Express web application that demonstrates OAuth authentication with Bluesky accounts.
 
-### NOTE:
+### NOTE: 🤖
 
 After spending hours and hours going through documents and examples to get this working and getting nowhere, I resorted to asking Claude for some help. Twenty minutes later, after going back and forth getting over some errors it made, we finally got it working. This is the result. (I feel a bit dirty, but relieved.)
 
